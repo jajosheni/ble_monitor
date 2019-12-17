@@ -25,7 +25,7 @@ BLEServer* pServer = NULL;
 BLECharacteristic* tCharacteristic = NULL;
 BLECharacteristic* hCharacteristic = NULL;
 BLECharacteristic* vCharacteristic = NULL;
-BLECharacteristic* aCharacteristic = NULL;
+BLECharacteristic* thresholdCharacteristic = NULL;
 
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
@@ -34,10 +34,7 @@ bool oldDeviceConnected = false;
 // https://www.uuidgenerator.net/
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define T_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a6"
-#define H_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a7"
-#define V_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define A_CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+#define VOLTAGE_UUID        "7b4195e8-2117-11ea-a5e8-2e728ce88125"
 
 #define DHTPIN A14 //D13
 #define DHTTYPE DHT11
@@ -56,6 +53,47 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 
+float threshold = 1.0;
+
+class WriteCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *thresholdCharacteristic) {
+      std::string value = thresholdCharacteristic->getValue();
+      
+      char val[6];
+      boolean flag = true;
+      if (value.length() > 0 && value.length() < 6) {
+        for (int i = 0; i < value.length(); i++){
+          val[i] = value[i];
+
+          if(val[i] >= 48 && val[i] <= 57){
+            continue;
+          }else if(val[i] == 46){
+            continue;
+          }else{
+            Serial.print("illegal value");
+            threshold = 1.0;
+            dtostrf(threshold, 1, 2, val);
+            thresholdCharacteristic->setValue(val);
+            flag = false;
+            break;
+          }
+        }
+
+        if(flag){
+          threshold = atof(val);
+        }
+      }
+    }
+};
+
+
+float temperature = 0.0;
+float humidity = 0.0;
+float voltage = 5.0;
+
+float prev_temp = 0.0;
+float prev_hum = 0.0;
+float prev_volt = 5.0;
 
 void setup() {
   Serial.begin(115200);
@@ -71,40 +109,58 @@ void setup() {
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  // Create a temperature BLE Characteristic
+  // Create a temperature BLE Characteristic -- 0x2A6E - Temperature
   tCharacteristic = pService->createCharacteristic(
-                      T_CHARACTERISTIC_UUID,
+                      BLEUUID((uint16_t)0x2A6E),
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
 
-  // Create a humidity BLE Characteristic
+  // Create a humidity BLE Characteristic -- 0x2A6F - Humidity
   hCharacteristic = pService->createCharacteristic(
-                      H_CHARACTERISTIC_UUID,
+                      BLEUUID((uint16_t)0x2A6F),
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
 
   // Create a voltage BLE Characteristic
   vCharacteristic = pService->createCharacteristic(
-                      V_CHARACTERISTIC_UUID,
+                      VOLTAGE_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
 
-  // Create a merged BLE Characteristic
-  aCharacteristic = pService->createCharacteristic(
-                      A_CHARACTERISTIC_UUID,
+  // Create a threshold Characteristic -- 0x2A7F - Aerobic Threshold
+  thresholdCharacteristic = pService->createCharacteristic(
+                      BLEUUID((uint16_t)0x2A7F),
                       BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_NOTIFY
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_WRITE
                     );
 
   // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
   // Create a BLE Descriptor
+  
+  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2901));  // 0x2901 -- client characteristic configuration
+  tempDescriptor.setValue("Temperature Value");
+  tCharacteristic->addDescriptor(&tempDescriptor);
   tCharacteristic->addDescriptor(new BLE2902());
+
+  BLEDescriptor humDescriptor(BLEUUID((uint16_t)0x2901)); 
+  humDescriptor.setValue("Humidity Value");
+  hCharacteristic->addDescriptor(&humDescriptor);
   hCharacteristic->addDescriptor(new BLE2902());
+  
+  
+  BLEDescriptor voltageDescriptor(BLEUUID((uint16_t)0x2901)); 
+  voltageDescriptor.setValue("Voltage Value");
+  vCharacteristic->addDescriptor(&voltageDescriptor);
   vCharacteristic->addDescriptor(new BLE2902());
-  aCharacteristic->addDescriptor(new BLE2902());
+
+  thresholdCharacteristic->setCallbacks(new WriteCallbacks());
+  char txString[8];
+  dtostrf(threshold, 1, 2, txString);
+  thresholdCharacteristic->setValue(txString);
 
   // Start the service
   pService->start();
@@ -118,54 +174,42 @@ void setup() {
   Serial.println("Waiting a client connection to notify...");
 }
 
-char mString[32];
-char txString[8];
-char hxString[8];
-char vxString[8];
-float temperature = 22.11;
-float humidity = 0.67;
-float voltage = 10.20;
-
-void update_data(){
-
-  //use the functions which are supplied by library.
-  humidity = dht.readHumidity();
-  // Read temperature as Celsius (the default)
-  temperature = dht.readTemperature();
-
-  if (isnan(humidity) || isnan(temperature)) {
-    Serial.println("Failed to read from DHT sensor!");
-    humidity = -10.0;
-    temperature = 1000.0;
-    return;
-  }
-  
-  voltage += 1.0;
-  dtostrf(temperature, 1, 2, txString);
-  dtostrf(humidity, 1, 2, hxString);
-  dtostrf(voltage, 1, 2, vxString);
-  sprintf(mString,"%s %s %s", txString, hxString, vxString);
-        
-}
-
 void loop() {
     // notify changed value
     if (deviceConnected) {
-      update_data();
-      tCharacteristic->setValue(temperature);
-      tCharacteristic->notify();
+      humidity = dht.readHumidity();
+      temperature = dht.readTemperature();
+      voltage += 1.0;
+    
+      if (isnan(humidity) || isnan(temperature)) {
+        Serial.println("Failed to read from DHT sensor!");
+        humidity = -10.0;
+        temperature = 1000.0;
+      }
 
-      hCharacteristic->setValue(humidity);
-      hCharacteristic->notify();
+      if(abs(temperature - prev_temp) > threshold){
+        tCharacteristic->setValue(temperature);
+        prev_temp = temperature;
+        tCharacteristic->notify();
+      }
 
-      vCharacteristic->setValue(voltage);
-      vCharacteristic->notify();        
-      
-      aCharacteristic->setValue(mString);
-      aCharacteristic->notify();
+      if(abs(humidity - prev_hum) > threshold){
+        hCharacteristic->setValue(humidity);
+        prev_hum = humidity;
+        hCharacteristic->notify();
+      }
+
+      if(abs(voltage - prev_volt) > threshold){
+        vCharacteristic->setValue(voltage);
+        prev_volt = voltage;
+        vCharacteristic->notify(); 
+      }  
       
       delay(2*1000); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
     }
+
+
+    
     // disconnecting
     if (!deviceConnected && oldDeviceConnected) {
         delay(500); // give the bluetooth stack the chance to get things ready
