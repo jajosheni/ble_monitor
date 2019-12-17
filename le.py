@@ -59,7 +59,7 @@ if __name__ == "__main__":
         except:
             connect_to_device()
 
-    custom_uuid = btle.UUID(my_services[2].uuid)  # 0 & 1 are Generic Attributes and Service
+    custom_uuid = btle.UUID(my_services[2].uuid)  # 0 & 1 are Generic Attribute and Service
     custom_service = dev.getServiceByUUID(custom_uuid)
 
     sensor_list = ["Temperature", "Humidity", "Voltage", "Merged"]
