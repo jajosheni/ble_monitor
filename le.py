@@ -2,7 +2,6 @@
 
 from bluepy import btle
 import time
-import struct
 from sensor import Sensor
 
 
@@ -17,9 +16,9 @@ class MyDelegate(btle.DefaultDelegate):
             if sensor.handle == cHandle:
                 try:
                     sensor.update_data(data)
-                    print(sensor.value)
-                except:
-                    pass
+                    print(sensor.sensor_name + " : " + str(sensor.value))
+                except Exception as e:
+                    print(e)
 
 
 
