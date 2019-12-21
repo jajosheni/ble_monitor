@@ -1,7 +1,6 @@
 #!/usr/bin/python
-
-
 import struct
+
 
 class Sensor:
     def __init__(self, sensor_id, sensor_name, data_type, sensor):
@@ -21,7 +20,7 @@ class Sensor:
 
     def __str__(self):
         string = "ID: " + str(self.sensor_id) + \
-                " - " + self.sensor_name + \
-                " - " + "Data type: " + self.data_type
+                 " - " + self.sensor_name + \
+                 " - " + "Data type: " + self.data_type + \
+                 " - " + "Handle: " + str(self.handle)
         return string
-        

@@ -21,10 +21,15 @@
 #include <BLE2902.h>
 
 BLEServer* pServer = NULL;
+char * panelID = "56eb3d5d7c727d861b3278ec"; //umuttepe paneli
+BLECharacteristic* panelCharacteristic = NULL; //panelID
 
-BLECharacteristic* tCharacteristic = NULL;
-BLECharacteristic* hCharacteristic = NULL;
-BLECharacteristic* vCharacteristic = NULL;
+BLECharacteristic* tCharacteristic = NULL; //temperature
+BLECharacteristic* hCharacteristic = NULL; //humidity(moisture)
+BLECharacteristic* vCharacteristic = NULL; //voltage
+BLECharacteristic* cCharacteristic = NULL; //current
+BLECharacteristic* lCharacteristic = NULL; //light
+
 BLECharacteristic* thresholdCharacteristic = NULL;
 
 bool deviceConnected = false;
@@ -33,16 +38,22 @@ bool oldDeviceConnected = false;
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define TEMPERATURE_UUID    "7b4195e8-2117-11ea-a5e8-2e728ce88123"
-#define HUMIDITY_UUID       "7b4195e8-2117-11ea-a5e8-2e728ce88124"
-#define VOLTAGE_UUID        "7b4195e8-2117-11ea-a5e8-2e728ce88125"
-#define THRESHOLD_UUID      "7b4195e8-2117-11ea-a5e8-2e728ce88125"
+#define SETUP_SERVICE_UUID  "8be32b1e-2432-11ea-978f-2e728ce88125"
+#define DATA_SERVICE_UUID   "8be32db2-2432-11ea-978f-2e728ce88125"
 
+#define PANEL_UUID          "712b365e-2432-11ea-978f-2e728ce88125"
+#define THRESHOLD_UUID      "712b3a8c-2432-11ea-978f-2e728ce88125"
+
+#define TEMPERATURE_UUID    "4cf26c08-2432-11ea-978f-2e728ce88125"
+#define HUMIDITY_UUID       "4cf26ed8-2432-11ea-978f-2e728ce88125"
+#define VOLTAGE_UUID        "4cf27162-2432-11ea-978f-2e728ce88125"
+#define CURRENT_UUID        "4cf273c4-2432-11ea-978f-2e728ce88125"
+#define LIGHT_UUID          "4cf276b2-2432-11ea-978f-2e728ce88125"
+
+// TEMPERATURE - HUMIDITY SENSOR SETUP
 #define DHTPIN A14 //D13
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
-
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -58,9 +69,21 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 float threshold = 0.1;
 
+float temperature = 0.0;
+float humidity = 0.0;
+float voltage = 5.0;
+float current = 1.0;
+float light = 10.0;
+
+float prev_temp = 0.0;
+float prev_hum = 0.0;
+float prev_volt = 5.0;
+float prev_curr = 1.0;
+float prev_light = 10.0;
+
 class WriteCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *thresholdCharacteristic) {
-      std::string value = thresholdCharacteristic->getValue();
+      std::string value = thresholdCharacteristic->getValue(); // get value from client and write it to threshold
       
       char val[6];
       boolean flag = true;
@@ -89,15 +112,6 @@ class WriteCallbacks: public BLECharacteristicCallbacks {
     }
 };
 
-
-float temperature = 0.0;
-float humidity = 0.0;
-float voltage = 5.0;
-
-float prev_temp = 0.0;
-float prev_hum = 0.0;
-float prev_volt = 5.0;
-
 void setup() {
   Serial.begin(115200);
   dht.begin();
@@ -110,66 +124,93 @@ void setup() {
   pServer->setCallbacks(new MyServerCallbacks());
 
   // Create the BLE Service
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+  BLEService *sService = pServer->createService(SETUP_SERVICE_UUID);
+  BLEService *dService = pServer->createService(DATA_SERVICE_UUID);
 
-  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A6E) - Temperature
-  tCharacteristic = pService->createCharacteristic(
-                      TEMPERATURE_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_NOTIFY
+  // ----------------------------------------------------------------------------------
+  // Create a panelID Characteristic & Add the panelID value
+  panelCharacteristic = sService->createCharacteristic(
+                      PANEL_UUID,
+                      BLECharacteristic::PROPERTY_READ
                     );
+  // Create a BLE Descriptor
+  // https://www.bluetooth.com/specifications/gatt/characteristics/
+  BLEDescriptor panelDescriptor(BLEUUID((uint16_t)0x2902));  // SYSTEM ID
+  panelDescriptor.setValue("Panel ID");
+  panelCharacteristic->addDescriptor(&panelDescriptor);
+  panelCharacteristic->setValue(panelID);
 
-  // Create a humidity BLE Characteristic -- BLEUUID((uint16_t)0x2A6F) - Humidity
-  hCharacteristic = pService->createCharacteristic(
-                      HUMIDITY_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
-
-  // Create a voltage BLE Characteristic
-  vCharacteristic = pService->createCharacteristic(
-                      VOLTAGE_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
-
-  // Create a threshold Characteristic -- BLEUUID((uint16_t)0x2A7F) - Aerobic Threshold
-  thresholdCharacteristic = pService->createCharacteristic(
+  // ----------------------------------------------------------------------------------
+  // Create a threshold Characteristic
+  thresholdCharacteristic = sService->createCharacteristic(
                       THRESHOLD_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_WRITE
                     );
-
-  // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
-  // Create a BLE Descriptor
-  
-//  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2901));  // 0x2901 -- client characteristic configuration
-//  tempDescriptor.setValue("Temperature Value");
-//  tCharacteristic->addDescriptor(&tempDescriptor);
-  tCharacteristic->addDescriptor(new BLE2902());
-
-//  BLEDescriptor humDescriptor(BLEUUID((uint16_t)0x2901)); 
-//  humDescriptor.setValue("Humidity Value");
-//  hCharacteristic->addDescriptor(&humDescriptor);
-  hCharacteristic->addDescriptor(new BLE2902());
-  
-  
-//  BLEDescriptor voltageDescriptor(BLEUUID((uint16_t)0x2901)); 
-//  voltageDescriptor.setValue("Voltage Value");
-//  vCharacteristic->addDescriptor(&voltageDescriptor);
-  vCharacteristic->addDescriptor(new BLE2902());
-
+                    
   thresholdCharacteristic->setCallbacks(new WriteCallbacks());
   char txString[8];
   dtostrf(threshold, 1, 2, txString);
   thresholdCharacteristic->setValue(txString);
 
+  // ----------------------------------------------------------------------------------
+
+  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A6E) - Temperature
+  tCharacteristic = dService->createCharacteristic(
+                      TEMPERATURE_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+//  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2A6E));
+//  tempDescriptor.setValue("Temperature Value");
+//  tCharacteristic->addDescriptor(&tempDescriptor);
+  tCharacteristic->addDescriptor(new BLE2902());
+  
+  // ----------------------------------------------------------------------------------
+  // Create a humidity BLE Characteristic -- BLEUUID((uint16_t)0x2A6F) - Humidity
+  hCharacteristic = dService->createCharacteristic(
+                      HUMIDITY_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+  hCharacteristic->addDescriptor(new BLE2902());
+  
+  // ----------------------------------------------------------------------------------
+  // Create a voltage BLE Characteristic
+  vCharacteristic = dService->createCharacteristic(
+                      VOLTAGE_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+  vCharacteristic->addDescriptor(new BLE2902());
+
+  // ----------------------------------------------------------------------------------
+  // Create a current BLE Characteristic -- custom service supports only 4 characteristics with active notify
+//  cCharacteristic = dService->createCharacteristic(
+//                      CURRENT_UUID,
+//                      BLECharacteristic::PROPERTY_READ   |
+//                      BLECharacteristic::PROPERTY_NOTIFY
+//                    );
+//  cCharacteristic->addDescriptor(new BLE2902());
+
+  // ----------------------------------------------------------------------------------
+  // Create a light BLE Characteristic
+  lCharacteristic = dService->createCharacteristic(
+                      LIGHT_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+  lCharacteristic->addDescriptor(new BLE2902());
+  
+  // ----------------------------------------------------------------------------------
   // Start the service
-  pService->start();
+  sService->start();
+  dService->start();
 
   // Start advertising
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->addServiceUUID(SETUP_SERVICE_UUID);
+  pAdvertising->addServiceUUID(DATA_SERVICE_UUID);
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
@@ -182,12 +223,20 @@ void loop() {
       humidity = dht.readHumidity();
       temperature = dht.readTemperature();
       voltage += 0.5;
+      current += 0.5;
+      light += 0.5;
+      Serial.print("----------------\nPanel ID: ");
+      Serial.println(panelID);
       Serial.print("humidity: ");
       Serial.println(humidity);
-      Serial.print("temp: ");
+      Serial.print("temperature: ");
       Serial.println(temperature);
-      Serial.print("volt: ");
+      Serial.print("voltage: ");
       Serial.println(voltage);
+      Serial.print("current: ");
+      Serial.println(current);
+      Serial.print("light: ");
+      Serial.println(light);
       Serial.print("threshold: ");
       Serial.println(threshold);
     
@@ -214,8 +263,20 @@ void loop() {
         prev_volt = voltage;
         vCharacteristic->notify(); 
       }  
+
+//      if(abs(current - prev_curr) > threshold){
+//        cCharacteristic->setValue(current);
+//        prev_curr = current;
+//        cCharacteristic->notify(); 
+//      }  
+
+      if(abs(light - prev_light) > threshold){
+        lCharacteristic->setValue(light);
+        prev_light = light;
+        lCharacteristic->notify(); 
+      }  
       
-      delay(1*1000); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+      delay(1*1000); // bluetooth stack will go into congestion if too many packets are sent
     }
 
 
