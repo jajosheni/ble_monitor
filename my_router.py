@@ -12,7 +12,7 @@ class Router:
 
     def send_data(self, data, m_path):
         try:
-            self.socketIO.emit('testVerileri', data)
+            self.socketIO.emit(m_path, data)
             self.socketIO.wait(seconds=1)
         except Exception as e:
             print(e)
