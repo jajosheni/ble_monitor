@@ -120,7 +120,7 @@ if __name__ == "__main__":
     data_uuid = btle.UUID(my_services[3].uuid)  # DATA SERVICE
     data_service = dev.getServiceByUUID(data_uuid)
 
-    sensor_list = ["Temperature", "Humidity", "Voltage", "Current"]
+    sensor_list = ["Humidity", "Voltage", "Current", "Temperature"]
 
     for i in range(len(sensor_list)):
         x = Sensor(
@@ -140,7 +140,9 @@ if __name__ == "__main__":
     for i in range(len(sensor_list)):
         notify = my_sensors[i].sensor
         notify_handle = notify.getHandle() + 1
+        print("connecting to handle : " + str(notify_handle) + " : " + str(notify.getHandle()))
         dev.writeCharacteristic(notify_handle, setup_data, withResponse=True)
+        time.sleep(0.1)
 
     # Main ----
 

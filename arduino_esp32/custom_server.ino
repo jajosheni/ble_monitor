@@ -157,18 +157,6 @@ void setup() {
 
   // ----------------------------------------------------------------------------------
 
-  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A1C) - Temperature measurement
-  tCharacteristic = dService->createCharacteristic(
-                      TEMPERATURE_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_NOTIFY
-                    );
-  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2A1C));
-  tempDescriptor.setValue("Temperature Value");
-  tCharacteristic->addDescriptor(&tempDescriptor);
-  tCharacteristic->addDescriptor(new BLE2902());
-  
-  // ----------------------------------------------------------------------------------
   // Create a humidity BLE Characteristic -- BLEUUID((uint16_t)0x2A6F) - Humidity
   hCharacteristic = dService->createCharacteristic(
                       HUMIDITY_UUID,
@@ -194,6 +182,20 @@ void setup() {
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
   cCharacteristic->addDescriptor(new BLE2902());
+  
+  // ----------------------------------------------------------------------------------
+
+
+  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A1C) - Temperature measurement
+  tCharacteristic = dService->createCharacteristic(
+                      TEMPERATURE_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2A1C));
+  tempDescriptor.setValue("Temperature Value");
+  tCharacteristic->addDescriptor(&tempDescriptor);
+  tCharacteristic->addDescriptor(new BLE2902());
   
   // ----------------------------------------------------------------------------------
   // Start the services
