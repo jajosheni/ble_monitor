@@ -12,7 +12,7 @@ class MyDelegate(btle.DefaultDelegate):
         btle.DefaultDelegate.__init__(self)
 
     def handleNotification(self, cHandle, data):  # override func
-        global my_sensors, temperature, humidity, voltage, current, light
+        global my_sensors, temperature, humidity, voltage, current
 
         for sensor in my_sensors:
             if sensor.handle == cHandle:
@@ -25,7 +25,7 @@ class MyDelegate(btle.DefaultDelegate):
                     elif sensor.sensor_id == 2:
                         voltage = sensor.value
                     elif sensor.sensor_id == 3:
-                        light = sensor.value
+                        current = sensor.value
 
                 except Exception as e:
                     print(e)
@@ -62,8 +62,8 @@ def notif_thread():
 
 
 def sync_thread():
-    global stop_threads, panel_id, temperature, humidity, voltage, current, light
-    r = Router("192.168.43.228", 1337)
+    global stop_threads, panel_id, temperature, humidity, voltage, current
+    r = Router("30.10.21.244", 1337)
 
     while True:
         if stop_threads:
@@ -75,8 +75,7 @@ def sync_thread():
             temperature=temperature,
             humidity=humidity,
             voltage=voltage,
-            current=current,
-            light=light
+            current=current
         )
         print(data)
         r.send_data(data, '/')
@@ -113,7 +112,7 @@ if __name__ == "__main__":
     panel = setup_service.getCharacteristics()[0]
     panel_id = panel.read()
 
-    threshold_value = "0.2"
+    threshold_value = "0.05"
     s = setup_service.getCharacteristics()[1]
     sHandle = s.getHandle()
     dev.writeCharacteristic(sHandle, threshold_value, withResponse=True)
@@ -121,7 +120,7 @@ if __name__ == "__main__":
     data_uuid = btle.UUID(my_services[3].uuid)  # DATA SERVICE
     data_service = dev.getServiceByUUID(data_uuid)
 
-    sensor_list = ["Temperature", "Humidity", "Voltage", "Light"]
+    sensor_list = ["Temperature", "Humidity", "Voltage", "Current"]
 
     for i in range(len(sensor_list)):
         x = Sensor(
@@ -145,11 +144,10 @@ if __name__ == "__main__":
 
     # Main ----
 
-    temperature = 10.0
-    humidity = 20.0
+    temperature = 100.0
+    humidity = -1.0
     voltage = 10.0
     current = 5.0
-    light = 5.0
 
     stop_threads = False
     notif = Thread(target=notif_thread, args=())

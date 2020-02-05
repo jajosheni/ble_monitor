@@ -17,12 +17,12 @@ class Router:
         except Exception as e:
             print(e)
 
-    def generate_data(self, panelID, humidity, temperature, voltage, current, light):
+    def generate_data(self, panelID, humidity, temperature, voltage, current):
         return {
             'panelId': panelID,
             'current': current,
             'voltage': voltage,
-            'light': light,
+            'light': 0.0,
             'temperature': temperature,
             'moisture': humidity
             }
