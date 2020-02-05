@@ -22,7 +22,6 @@ class Router:
             'panelId': panelID,
             'current': current,
             'voltage': voltage,
-            'light': 0.0,
             'temperature': temperature,
             'moisture': humidity
             }
