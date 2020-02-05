@@ -78,7 +78,7 @@ def sync_thread():
             current=current
         )
         print(data)
-        r.send_data(data, '/')
+        r.send_data(data, 'testVerileri')
 
         time.sleep(1.0)
 
