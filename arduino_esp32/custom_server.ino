@@ -1,7 +1,13 @@
 /*
-   Create a BLE server that, once we receive a connection, will send periodic notifications.
-   The service advertises itself as: 4fafc201-1fb5-459e-8fcc-c5c9c331914b
-   And has a characteristic of: beb5483e-36e1-4688-b7f5-ea07361b26a8
+   Create a BLE server that, once we receive a connection, will send notifications based on data change.
+   The setup service advertises itself as: "8be32b1e-2432-11ea-978f-2e728ce88125"
+      -Panel ID
+      -Threshold
+   whereas the data service is:            "8be32db2-2432-11ea-978f-2e728ce88125"
+      -Temperature
+      -Humidity
+      -Current
+      -Voltage
 
    The design of creating the BLE server is:
    1. Create a BLE Server
@@ -28,7 +34,6 @@ BLECharacteristic* tCharacteristic = NULL; //temperature
 BLECharacteristic* hCharacteristic = NULL; //humidity(moisture)
 BLECharacteristic* vCharacteristic = NULL; //voltage
 BLECharacteristic* cCharacteristic = NULL; //current
-BLECharacteristic* lCharacteristic = NULL; //light
 
 BLECharacteristic* thresholdCharacteristic = NULL;
 
@@ -44,11 +49,10 @@ bool oldDeviceConnected = false;
 #define PANEL_UUID          "712b365e-2432-11ea-978f-2e728ce88125"
 #define THRESHOLD_UUID      "712b3a8c-2432-11ea-978f-2e728ce88125"
 
-#define TEMPERATURE_UUID    "4cf26c08-2432-11ea-978f-2e728ce88125"
+#define TEMPERATURE_UUID    "2A1C" //Temp measurement
 #define HUMIDITY_UUID       "4cf26ed8-2432-11ea-978f-2e728ce88125"
 #define VOLTAGE_UUID        "4cf27162-2432-11ea-978f-2e728ce88125"
 #define CURRENT_UUID        "4cf273c4-2432-11ea-978f-2e728ce88125"
-#define LIGHT_UUID          "4cf276b2-2432-11ea-978f-2e728ce88125"
 
 // TEMPERATURE - HUMIDITY SENSOR SETUP
 #define DHTPIN A14 //D13
@@ -73,13 +77,11 @@ float temperature = 0.0;
 float humidity = 0.0;
 float voltage = 5.0;
 float current = 1.0;
-float light = 10.0;
 
 float prev_temp = 0.0;
 float prev_hum = 0.0;
 float prev_volt = 5.0;
 float prev_curr = 1.0;
-float prev_light = 10.0;
 
 class WriteCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *thresholdCharacteristic) {
@@ -155,15 +157,15 @@ void setup() {
 
   // ----------------------------------------------------------------------------------
 
-  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A6E) - Temperature
+  // Create a temperature BLE Characteristic -- BLEUUID((uint16_t)0x2A1C) - Temperature measurement
   tCharacteristic = dService->createCharacteristic(
                       TEMPERATURE_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
-//  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2A6E));
-//  tempDescriptor.setValue("Temperature Value");
-//  tCharacteristic->addDescriptor(&tempDescriptor);
+  BLEDescriptor tempDescriptor(BLEUUID((uint16_t)0x2A1C));
+  tempDescriptor.setValue("Temperature Value");
+  tCharacteristic->addDescriptor(&tempDescriptor);
   tCharacteristic->addDescriptor(new BLE2902());
   
   // ----------------------------------------------------------------------------------
@@ -184,26 +186,17 @@ void setup() {
                     );
   vCharacteristic->addDescriptor(new BLE2902());
 
-  // ----------------------------------------------------------------------------------
-  // Create a current BLE Characteristic -- custom service supports only 4 characteristics with active notify
-//  cCharacteristic = dService->createCharacteristic(
-//                      CURRENT_UUID,
-//                      BLECharacteristic::PROPERTY_READ   |
-//                      BLECharacteristic::PROPERTY_NOTIFY
-//                    );
-//  cCharacteristic->addDescriptor(new BLE2902());
-
-  // ----------------------------------------------------------------------------------
-  // Create a light BLE Characteristic
-  lCharacteristic = dService->createCharacteristic(
-                      LIGHT_UUID,
+   ----------------------------------------------------------------------------------
+//   Create a current BLE Characteristic -- custom service supports only 4 characteristics with active notify
+  cCharacteristic = dService->createCharacteristic(
+                      CURRENT_UUID,
                       BLECharacteristic::PROPERTY_READ   |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
-  lCharacteristic->addDescriptor(new BLE2902());
+  cCharacteristic->addDescriptor(new BLE2902());
   
   // ----------------------------------------------------------------------------------
-  // Start the service
+  // Start the services
   sService->start();
   dService->start();
 
@@ -212,7 +205,7 @@ void setup() {
   pAdvertising->addServiceUUID(SETUP_SERVICE_UUID);
   pAdvertising->addServiceUUID(DATA_SERVICE_UUID);
   pAdvertising->setScanResponse(false);
-  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+  pAdvertising->setMinPreferred(0x00);  // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
 }
@@ -224,7 +217,6 @@ void loop() {
       temperature = dht.readTemperature();
       voltage += 0.5;
       current += 0.5;
-      light += 0.5;
       Serial.print("----------------\nPanel ID: ");
       Serial.println(panelID);
       Serial.print("humidity: ");
@@ -235,8 +227,6 @@ void loop() {
       Serial.println(voltage);
       Serial.print("current: ");
       Serial.println(current);
-      Serial.print("light: ");
-      Serial.println(light);
       Serial.print("threshold: ");
       Serial.println(threshold);
     
@@ -264,16 +254,10 @@ void loop() {
         vCharacteristic->notify(); 
       }  
 
-//      if(abs(current - prev_curr) > threshold){
-//        cCharacteristic->setValue(current);
-//        prev_curr = current;
-//        cCharacteristic->notify(); 
-//      }  
-
-      if(abs(light - prev_light) > threshold){
-        lCharacteristic->setValue(light);
-        prev_light = light;
-        lCharacteristic->notify(); 
+      if(abs(current - prev_curr) > threshold){
+        cCharacteristic->setValue(current);
+        prev_curr = current;
+        cCharacteristic->notify(); 
       }  
       
       delay(1*1000); // bluetooth stack will go into congestion if too many packets are sent
